@@ -193,7 +193,7 @@ func getPrompt() string {
 
 	// Читаем из stdin (интерактивный режим)
 	fmt.Print("Введите ваш запрос: ")
-	data, err := io.ReadAll(os.Stdin)
+	data, err := io.ReadAll(os.Stdin) // CTRL+D, чтобы сымитировать EOF
 	if err != nil {
 		log.Fatalf("Ошибка чтения ввода: %v", err)
 	}
