@@ -1,0 +1,23 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "feature-architect": {
+      "model": "deepseek/deepseek-reasoner",
+      "description": "Анализирует кодовую базу и создаёт техническую документацию для реализации feature",
+      "prompt": ".opencode/agents/feature-architect.md",
+      "mode": "primary",
+      "permission": {
+        "edit": "ask",
+        "bash": {
+          "git *": "allow",
+          "find *": "allow",
+          "wc *": "allow",
+          "head *": "allow",
+          "tail *": "allow",
+          "cat *": "allow",
+          "*": "deny"
+        }
+      }
+    }
+  }
+}
