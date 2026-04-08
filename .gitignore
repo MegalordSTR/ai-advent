@@ -2,3 +2,5 @@ dialogs
 .idea
 *.env
 answer*.md
+*.db
+.tmp

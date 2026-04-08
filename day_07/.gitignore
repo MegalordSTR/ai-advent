@@ -1,0 +1,20 @@
+# Environment variables
+.env.local
+.env
+
+# Binary
+ai-agent-cli
+
+# Go
+go.sum
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
