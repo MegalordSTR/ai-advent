@@ -19,3 +19,5 @@ Thumbs.db
 
 # Logs
 *.log
+
+web-ui/node_modules
