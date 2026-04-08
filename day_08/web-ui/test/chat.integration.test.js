@@ -61,8 +61,8 @@ describe('Chat UI Integration', () => {
             agentsList.appendChild(agentItem);
             
             const mockMessages = [
-                { Role: 'user', Content: 'Hello' },
-                { Role: 'assistant', Content: 'Hi there' },
+                { role: 'user', content: 'Hello' },
+                { role: 'assistant', content: 'Hi there' },
             ];
             
             // Mock successful fetch for messages
@@ -122,24 +122,26 @@ describe('Chat UI Integration', () => {
     describe('Message rendering', () => {
         test('renderMessages filters system messages', () => {
             const messages = [
-                { Role: 'system', Content: 'You are a helpful assistant' },
-                { Role: 'user', Content: 'Hello' },
-                { Role: 'assistant', Content: 'Hi' },
-                { Role: 'system', Content: 'Ignore this' },
+                { role: 'system', content: 'You are a helpful assistant' },
+                { role: 'user', content: 'Hello' },
+                { role: 'assistant', content: 'Hi' },
+                { role: 'system', content: 'Ignore this' },
             ];
             
             chatApp.renderMessages(messages);
             
             // Only user and assistant messages should be kept
             expect(chatApp.getCurrentMessages()).toEqual([
-                { Role: 'user', Content: 'Hello' },
-                { Role: 'assistant', Content: 'Hi' },
+                { role: 'user', content: 'Hello' },
+                { role: 'assistant', content: 'Hi' },
             ]);
             
             // Verify DOM contains only user and assistant messages
             expect(messagesContainer.children.length).toBe(2);
             expect(messagesContainer.children[0].className).toBe('message user');
+            expect(messagesContainer.children[0].textContent).toBe('Hello');
             expect(messagesContainer.children[1].className).toBe('message assistant');
+            expect(messagesContainer.children[1].textContent).toBe('Hi');
         });
 
         test('renderMessages shows placeholder when no messages', () => {
@@ -149,6 +151,29 @@ describe('Chat UI Integration', () => {
                 '<div class="message assistant">No messages yet. Start the conversation!</div>'
             );
             expect(chatApp.getCurrentMessages()).toEqual([]);
+        });
+
+        test('renderMessages handles lowercase role/content fields from API', () => {
+            const messages = [
+                { role: 'system', content: 'You are a helpful assistant' },
+                { role: 'user', content: 'Hello' },
+                { role: 'assistant', content: 'Hi there' },
+            ];
+            
+            chatApp.renderMessages(messages);
+            
+            // Should filter out system messages
+            expect(chatApp.getCurrentMessages()).toEqual([
+                { role: 'user', content: 'Hello' },
+                { role: 'assistant', content: 'Hi there' },
+            ]);
+            
+            // Should render user and assistant messages with correct classes and content
+            expect(messagesContainer.children.length).toBe(2);
+            expect(messagesContainer.children[0].className).toBe('message user');
+            expect(messagesContainer.children[0].textContent).toBe('Hello');
+            expect(messagesContainer.children[1].className).toBe('message assistant');
+            expect(messagesContainer.children[1].textContent).toBe('Hi there');
         });
     });
 
@@ -210,9 +235,9 @@ describe('Chat UI Integration', () => {
             // Since we await sendMessage, the fetch mock should have resolved
             // The renderMessages for assistant response should have been called
             // Let's check the final state
-            expect(chatApp.getCurrentMessages()).toContainEqual(
-                { Role: 'assistant', Content: 'I am fine, thank you.' }
-            );
+             expect(chatApp.getCurrentMessages()).toContainEqual(
+                 { role: 'assistant', content: 'I am fine, thank you.' }
+             );
             
             // Verify status updated
             expect(status.textContent).toBe('Ready to chat with Помощник');
@@ -256,7 +281,9 @@ describe('Chat UI Integration', () => {
             
             await newChatApp.sendMessage();
             
-            expect(fetch).not.toHaveBeenCalled();
+            // fetch was called once by selectAgent in beforeEach
+            // sendMessage should not make additional calls
+            expect(fetch).toHaveBeenCalledTimes(1);
         });
 
         test('sendMessage does nothing with empty input', async () => {
@@ -265,7 +292,9 @@ describe('Chat UI Integration', () => {
             
             await chatApp.sendMessage();
             
-            expect(fetch).not.toHaveBeenCalled();
+            // fetch was called once by selectAgent in beforeEach
+            // sendMessage should not make additional calls with empty input
+            expect(fetch).toHaveBeenCalledTimes(1);
         });
     });
 

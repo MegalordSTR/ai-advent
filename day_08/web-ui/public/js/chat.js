@@ -72,7 +72,7 @@ export const createChatApp = (deps) => {
     // Render messages - updates currentMessages state and renders to DOM
     function renderMessages(messages) {
         // Filter out system messages (they're in the prompt)
-        currentMessages = messages.filter(msg => msg.Role !== 'system');
+        currentMessages = messages.filter(msg => msg.role !== 'system');
         
         messagesContainer.innerHTML = '';
         
@@ -83,8 +83,8 @@ export const createChatApp = (deps) => {
         
         currentMessages.forEach(msg => {
             const div = document.createElement('div');
-            div.className = `message ${msg.Role}`;
-            div.textContent = msg.Content;
+            div.className = `message ${msg.role}`;
+            div.textContent = msg.content;
             messagesContainer.appendChild(div);
         });
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -98,7 +98,7 @@ export const createChatApp = (deps) => {
         if (!text) return;
         
         // Add user message to UI immediately
-        const userMsg = { Role: 'user', Content: text };
+        const userMsg = { role: 'user', content: text };
         renderMessages([...currentMessages, userMsg]);
         messageInput.value = '';
         messageInput.disabled = true;
@@ -117,7 +117,7 @@ export const createChatApp = (deps) => {
             const data = await response.json();
             
             // Add assistant response
-            const assistantMsg = { Role: 'assistant', Content: data.response };
+            const assistantMsg = { role: 'assistant', content: data.response };
             renderMessages([...currentMessages, assistantMsg]);
             status.textContent = `Ready to chat with ${currentAgent.Name}`;
         } catch (error) {
