@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"ai-agent-cli/core/service"
@@ -32,12 +33,29 @@ func (h *ChatHandler) ListAgents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GetMessages handles GET /api/agents/{agentName}/messages
-func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
-	agentName := strings.TrimPrefix(r.URL.Path, "/api/agents/")
+// extractAgentName extracts and decodes the agent name from the URL path.
+// Expected path format: /api/agents/{agentName}/messages
+func extractAgentName(path string) (string, error) {
+	// Remove prefix and suffix
+	agentName := strings.TrimPrefix(path, "/api/agents/")
 	agentName = strings.TrimSuffix(agentName, "/messages")
 	if agentName == "" {
-		http.Error(w, "Agent name is required", http.StatusBadRequest)
+		return "", fmt.Errorf("Agent name is required")
+	}
+	// URL decode the agent name (handles encoded characters like Russian)
+	decoded, err := url.PathUnescape(agentName)
+	if err != nil {
+		// If decoding fails, return the original
+		return agentName, nil
+	}
+	return decoded, nil
+}
+
+// GetMessages handles GET /api/agents/{agentName}/messages
+func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
+	agentName, err := extractAgentName(r.URL.Path)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -55,10 +73,9 @@ func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 
 // SendMessage handles POST /api/agents/{agentName}/messages
 func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
-	agentName := strings.TrimPrefix(r.URL.Path, "/api/agents/")
-	agentName = strings.TrimSuffix(agentName, "/messages")
-	if agentName == "" {
-		http.Error(w, "Agent name is required", http.StatusBadRequest)
+	agentName, err := extractAgentName(r.URL.Path)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
