@@ -36,6 +36,41 @@ describe('Chat UI Integration', () => {
         errorBox.id = 'errorBox';
         errorBox.classList.add('hidden');
         
+        // Token display elements (must be in DOM for getElementById)
+        const tokenInfo = document.createElement('div');
+        tokenInfo.id = 'tokenInfo';
+        const currentTokens = document.createElement('span');
+        currentTokens.id = 'currentTokens';
+        const tokenDetails = document.createElement('span');
+        tokenDetails.id = 'tokenDetails';
+        tokenDetails.classList.add('hidden');
+        const promptTokens = document.createElement('span');
+        promptTokens.id = 'promptTokens';
+        const completionTokens = document.createElement('span');
+        completionTokens.id = 'completionTokens';
+        const totalTokens = document.createElement('span');
+        totalTokens.id = 'totalTokens';
+        const historyTokens = document.createElement('span');
+        historyTokens.id = 'historyTokens';
+        
+        // Assemble token hierarchy
+        tokenInfo.appendChild(currentTokens);
+        tokenInfo.appendChild(tokenDetails);
+        tokenDetails.appendChild(promptTokens);
+        tokenDetails.appendChild(completionTokens);
+        tokenDetails.appendChild(totalTokens);
+        tokenDetails.appendChild(historyTokens);
+        
+        // Append all to document body so getElementById works
+        document.body.innerHTML = '';
+        document.body.appendChild(agentsList);
+        document.body.appendChild(messagesContainer);
+        document.body.appendChild(messageInput);
+        document.body.appendChild(sendButton);
+        document.body.appendChild(status);
+        document.body.appendChild(errorBox);
+        document.body.appendChild(tokenInfo);
+        
         // Create chat app with real elements
         chatApp = createChatApp({
             agentsList,
@@ -96,6 +131,51 @@ describe('Chat UI Integration', () => {
             
             // Verify status updated
             expect(status.textContent).toBe('Ready to chat with Помощник');
+        });
+
+        test('selectAgent displays token counts when messages have token_count', async () => {
+            const mockAgent = {
+                Name: 'Helper',
+                Description: 'Test agent',
+            };
+            
+            const agentItem = document.createElement('li');
+            agentItem.className = 'agent-item';
+            agentsList.appendChild(agentItem);
+            
+            const mockMessages = [
+                { role: 'user', content: 'Hello', token_count: 10 },
+                { role: 'assistant', content: 'Hi there', token_count: 15 },
+                { role: 'system', content: 'You are helpful', token_count: 5 }, // should be filtered
+            ];
+            
+            fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => mockMessages,
+            });
+            
+            const mockEvent = { target: agentItem };
+            
+            await chatApp.selectAgent(mockAgent, mockEvent);
+            
+            // Verify messages rendered
+            expect(chatApp.getCurrentAgent()).toEqual(mockAgent);
+            expect(chatApp.getCurrentMessages()).toEqual([
+                { role: 'user', content: 'Hello', token_count: 10 },
+                { role: 'assistant', content: 'Hi there', token_count: 15 },
+            ]);
+            
+            // Verify token sums: history = 10+15+5 = 30 (including system message tokens)
+            const historyEl = document.getElementById('historyTokens');
+            const totalEl = document.getElementById('totalTokens');
+            const tokenDetailsEl = document.getElementById('tokenDetails');
+            expect(historyEl.textContent).toBe('30');
+            expect(totalEl.textContent).toBe('30');
+            // prompt/completion remain 0
+            expect(document.getElementById('promptTokens').textContent).toBe('0');
+            expect(document.getElementById('completionTokens').textContent).toBe('0');
+            // token details should be visible
+            expect(tokenDetailsEl.classList.contains('hidden')).toBe(false);
         });
 
         test('selectAgent shows error when fetch fails', async () => {
@@ -241,6 +321,34 @@ describe('Chat UI Integration', () => {
             
             // Verify status updated
             expect(status.textContent).toBe('Ready to chat with Помощник');
+        });
+
+        test('sendMessage updates token counts from API response', async () => {
+            messageInput.value = 'Test question';
+            
+            // Mock API response with token_counts
+            fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    response: 'Test answer',
+                    token_counts: {
+                        prompt_tokens: 20,
+                        completion_tokens: 10,
+                        total_tokens: 30,
+                        history_tokens: 5, // previous history tokens
+                    },
+                }),
+            });
+            
+            await chatApp.sendMessage();
+            
+            // Verify token display updated
+            expect(document.getElementById('promptTokens').textContent).toBe('20');
+            expect(document.getElementById('completionTokens').textContent).toBe('10');
+            expect(document.getElementById('totalTokens').textContent).toBe('30');
+            expect(document.getElementById('historyTokens').textContent).toBe('5');
+            // token details should be visible
+            expect(document.getElementById('tokenDetails').classList.contains('hidden')).toBe(false);
         });
 
         test('sendMessage handles API error', async () => {

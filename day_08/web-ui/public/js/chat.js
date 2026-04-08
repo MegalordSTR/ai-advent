@@ -91,6 +91,21 @@ export const createChatApp = (deps) => {
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const messages = await response.json();
             renderMessages(messages);
+            
+            // Calculate total tokens from history
+            let historyTokenSum = 0;
+            for (const msg of messages) {
+                if (msg.token_count !== undefined && msg.token_count !== null) {
+                    historyTokenSum += msg.token_count;
+                }
+            }
+            if (historyTokens) historyTokens.textContent = historyTokenSum;
+            if (totalTokens) totalTokens.textContent = historyTokenSum;
+            // Show token details if there are any tokens in history
+            if (tokenDetails && historyTokenSum > 0) {
+                tokenDetails.classList.remove('hidden');
+            }
+            
             status.textContent = `Ready to chat with ${agent.Name}`;
         } catch (error) {
             showError(`Failed to load messages: ${error.message}`);

@@ -16,7 +16,7 @@ import (
 type Message struct {
 	Role       string `json:"role"`
 	Content    string `json:"content"`
-	TokenCount int    `json:"-"` // token count for this message (optional)
+	TokenCount int    `json:"token_count,omitempty"` // token count for this message (optional)
 }
 
 type Usage struct {
