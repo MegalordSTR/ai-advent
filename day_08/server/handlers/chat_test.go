@@ -46,6 +46,13 @@ func (m *mockChatService) SendMessage(ctx context.Context, agentName, userMessag
 	return "Mocked response", nil
 }
 
+func (m *mockChatService) SendMessageWithUsage(ctx context.Context, agentName, userMessage string) (string, deepseek.Usage, error) {
+	if m.sendErr != nil {
+		return "", deepseek.Usage{}, m.sendErr
+	}
+	return "Mocked response", deepseek.Usage{PromptTokens: 10, CompletionTokens: 5, TotalTokens: 15}, nil
+}
+
 func (m *mockChatService) Close() error {
 	return m.closeErr
 }
@@ -199,7 +206,7 @@ func TestChatHandler_SendMessage(t *testing.T) {
 			agentName:  "Helper",
 			message:    "Hello, world!",
 			wantStatus: http.StatusOK,
-			wantBody:   `{"response":"Mocked response"}`,
+			wantBody:   `"response":"Mocked response"`,
 		},
 		{
 			name:       "missing agent name",
@@ -265,6 +272,10 @@ func TestChatHandler_SendMessage(t *testing.T) {
 			body := strings.TrimSpace(w.Body.String())
 			if tt.wantBody != "" && !strings.Contains(body, tt.wantBody) {
 				t.Errorf("SendMessage() body = %q, want containing %q", body, tt.wantBody)
+			}
+			// For success case, also verify token_counts are present
+			if tt.name == "success" && !strings.Contains(body, `"token_counts"`) {
+				t.Errorf("SendMessage() success response missing token_counts, body = %q", body)
 			}
 		})
 	}

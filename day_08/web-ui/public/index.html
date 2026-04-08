@@ -22,6 +22,15 @@
             <div class="error hidden" id="errorBox"></div>
             <div class="input-area">
                 <textarea id="messageInput" placeholder="Type your message here..." rows="3"></textarea>
+                <div class="token-info" id="tokenInfo">
+                    <span>Tokens: <span id="currentTokens">0</span> (approx)</span>
+                    <span class="token-details hidden" id="tokenDetails">
+                        | Prompt: <span id="promptTokens">0</span> | 
+                        Completion: <span id="completionTokens">0</span> | 
+                        Total: <span id="totalTokens">0</span> |
+                        History: <span id="historyTokens">0</span>
+                    </span>
+                </div>
                 <button id="sendButton">Send</button>
             </div>
             <div class="status" id="status">Select an agent to start chatting</div>

@@ -109,17 +109,28 @@ func (s *ChatService) SendMessage(ctx context.Context, agentName, userMessage st
 	conversation = append(conversation, messages...)
 	conversation = append(conversation, deepseek.Message{Role: "user", Content: userMessage})
 
-	// Call DeepSeek API
-	response, err := s.client.Chat(ctx, conversation)
+	// Call DeepSeek API with token usage tracking
+	response, usage, err := s.client.ChatWithUsage(ctx, conversation)
 	if err != nil {
 		return "", fmt.Errorf("API call failed: %w", err)
 	}
 
-	// Save both user message and assistant response
-	if err := storage.SaveMessage(s.db, agentName, "user", userMessage); err != nil {
+	// Estimate tokens for user message (approximate, using cl100k_base encoding)
+	userTokens, err := deepseek.EstimateTokens(userMessage)
+	if err != nil {
+		// Fallback: rough approximation (4 chars per token)
+		userTokens = len([]rune(userMessage)) / 4
+		if userTokens < 1 {
+			userTokens = 1
+		}
+		log.Printf("warning: failed to estimate tokens for user message, using approximation %d: %v", userTokens, err)
+	}
+
+	// Save both user message and assistant response with token counts
+	if err := storage.SaveMessage(s.db, agentName, "user", userMessage, userTokens); err != nil {
 		log.Printf("warning: failed to save user message: %v", err)
 	}
-	if err := storage.SaveMessage(s.db, agentName, "assistant", response); err != nil {
+	if err := storage.SaveMessage(s.db, agentName, "assistant", response, usage.CompletionTokens); err != nil {
 		log.Printf("warning: failed to save assistant message: %v", err)
 	}
 
@@ -129,6 +140,70 @@ func (s *ChatService) SendMessage(ctx context.Context, agentName, userMessage st
 	}
 
 	return response, nil
+}
+
+// SendMessageWithUsage sends a user message to the specified agent and returns the assistant's response along with token usage.
+func (s *ChatService) SendMessageWithUsage(ctx context.Context, agentName, userMessage string) (string, deepseek.Usage, error) {
+	// Load agent to get prompt
+	agents, err := agent.LoadAgents(s.agentsDir)
+	if err != nil {
+		return "", deepseek.Usage{}, fmt.Errorf("failed to load agents: %w", err)
+	}
+	var selectedAgent *agent.Agent
+	for _, a := range agents {
+		if a.Name == agentName {
+			selectedAgent = &a
+			break
+		}
+	}
+	if selectedAgent == nil {
+		return "", deepseek.Usage{}, fmt.Errorf("agent %s not found", agentName)
+	}
+
+	// Load existing messages
+	messages, err := storage.LoadMessages(s.db, agentName)
+	if err != nil {
+		log.Printf("warning: failed to load messages for agent %s: %v", agentName, err)
+	}
+
+	// Build conversation: system prompt + history + new user message
+	conversation := []deepseek.Message{
+		{Role: "system", Content: selectedAgent.Prompt},
+	}
+	conversation = append(conversation, messages...)
+	conversation = append(conversation, deepseek.Message{Role: "user", Content: userMessage})
+
+	// Call DeepSeek API with token usage tracking
+	response, usage, err := s.client.ChatWithUsage(ctx, conversation)
+	if err != nil {
+		return "", deepseek.Usage{}, fmt.Errorf("API call failed: %w", err)
+	}
+
+	// Estimate tokens for user message (approximate, using cl100k_base encoding)
+	userTokens, err := deepseek.EstimateTokens(userMessage)
+	if err != nil {
+		// Fallback: rough approximation (4 chars per token)
+		userTokens = len([]rune(userMessage)) / 4
+		if userTokens < 1 {
+			userTokens = 1
+		}
+		log.Printf("warning: failed to estimate tokens for user message, using approximation %d: %v", userTokens, err)
+	}
+
+	// Save both user message and assistant response with token counts
+	if err := storage.SaveMessage(s.db, agentName, "user", userMessage, userTokens); err != nil {
+		log.Printf("warning: failed to save user message: %v", err)
+	}
+	if err := storage.SaveMessage(s.db, agentName, "assistant", response, usage.CompletionTokens); err != nil {
+		log.Printf("warning: failed to save assistant message: %v", err)
+	}
+
+	// Prune old messages (keep last 200)
+	if err := storage.PruneMessages(s.db, agentName, 200); err != nil {
+		log.Printf("warning: failed to prune messages: %v", err)
+	}
+
+	return response, usage, nil
 }
 
 // GetClient returns the DeepSeek client (primarily for testing)
@@ -141,5 +216,6 @@ type ChatServiceInterface interface {
 	ListAgents() ([]agent.Agent, error)
 	GetChatHistory(agentName string) ([]deepseek.Message, error)
 	SendMessage(ctx context.Context, agentName, userMessage string) (string, error)
+	SendMessageWithUsage(ctx context.Context, agentName, userMessage string) (string, deepseek.Usage, error)
 	Close() error
 }

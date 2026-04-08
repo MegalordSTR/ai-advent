@@ -10,9 +10,31 @@ export const createChatApp = (deps) => {
         API_BASE = 'http://localhost:8080/api'
     } = deps;
 
+    // Token display elements
+    const tokenInfo = document.getElementById('tokenInfo');
+    const currentTokens = document.getElementById('currentTokens');
+    const tokenDetails = document.getElementById('tokenDetails');
+    const promptTokens = document.getElementById('promptTokens');
+    const completionTokens = document.getElementById('completionTokens');
+    const totalTokens = document.getElementById('totalTokens');
+    const historyTokens = document.getElementById('historyTokens');
+
     let currentAgent = null;
     let isLoading = false;
     let currentMessages = []; // Store messages in memory for consistent state
+
+    // Update token estimate based on input text
+    function updateTokenEstimate(text) {
+        const approxTokens = Math.max(1, Math.floor(text.length / 4));
+        if (currentTokens) currentTokens.textContent = approxTokens;
+    }
+
+    // Real-time token estimation
+    if (messageInput) {
+        messageInput.addEventListener('input', (e) => {
+            updateTokenEstimate(e.target.value);
+        });
+    }
 
     // Fetch agents from API
     async function loadAgents() {
@@ -47,6 +69,13 @@ export const createChatApp = (deps) => {
     async function selectAgent(agent, event) {
         currentAgent = agent;
         currentMessages = []; // Reset messages for new agent
+        // Reset token display
+        if (currentTokens) currentTokens.textContent = '0';
+        if (promptTokens) promptTokens.textContent = '0';
+        if (completionTokens) completionTokens.textContent = '0';
+        if (totalTokens) totalTokens.textContent = '0';
+        if (historyTokens) historyTokens.textContent = '0';
+        if (tokenDetails) tokenDetails.classList.add('hidden');
         // Update UI
         document.querySelectorAll('.agent-item').forEach(item => item.classList.remove('active'));
         event.target.closest('.agent-item').classList.add('active');
@@ -101,6 +130,7 @@ export const createChatApp = (deps) => {
         const userMsg = { role: 'user', content: text };
         renderMessages([...currentMessages, userMsg]);
         messageInput.value = '';
+        updateTokenEstimate('');
         messageInput.disabled = true;
         sendButton.disabled = true;
         isLoading = true;
@@ -120,6 +150,15 @@ export const createChatApp = (deps) => {
             const assistantMsg = { role: 'assistant', content: data.response };
             renderMessages([...currentMessages, assistantMsg]);
             status.textContent = `Ready to chat with ${currentAgent.Name}`;
+            
+            // Update token counts if provided
+            if (data.token_counts) {
+                if (promptTokens) promptTokens.textContent = data.token_counts.prompt_tokens;
+                if (completionTokens) completionTokens.textContent = data.token_counts.completion_tokens;
+                if (totalTokens) totalTokens.textContent = data.token_counts.total_tokens;
+                if (historyTokens) historyTokens.textContent = data.token_counts.history_tokens;
+                if (tokenDetails) tokenDetails.classList.remove('hidden');
+            }
         } catch (error) {
             showError(`Failed to send message: ${error.message}`);
             status.textContent = 'Error - try again';

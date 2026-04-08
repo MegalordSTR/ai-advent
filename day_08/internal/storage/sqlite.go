@@ -31,6 +31,7 @@ func InitDB(db *sql.DB) error {
 		agent_name TEXT NOT NULL,
 		role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
 		content TEXT NOT NULL,
+		token_count INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE INDEX IF NOT EXISTS idx_agent_name ON messages (agent_name);
@@ -39,15 +40,32 @@ func InitDB(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("failed to create table: %w", err)
 	}
+
+	// Add token_count column if it doesn't exist (for existing databases)
+	// SQLite doesn't support ADD COLUMN IF NOT EXISTS, so we check via pragma
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='token_count'").Scan(&count)
+	if err != nil {
+		// If pragma fails, continue without column addition
+		log.Printf("warning: failed to check for token_count column: %v", err)
+		return nil
+	}
+	if count == 0 {
+		_, err = db.Exec("ALTER TABLE messages ADD COLUMN token_count INTEGER")
+		if err != nil {
+			log.Printf("warning: failed to add token_count column: %v", err)
+		}
+	}
+
 	return nil
 }
 
 // SaveMessage stores a message in the database.
-func SaveMessage(db *sql.DB, agentName, role, content string) error {
+func SaveMessage(db *sql.DB, agentName, role, content string, tokenCount int) error {
 	if db == nil {
 		return errors.New("database connection is nil")
 	}
-	stmt, err := db.Prepare("INSERT INTO messages (agent_name, role, content) VALUES (?, ?, ?)")
+	stmt, err := db.Prepare("INSERT INTO messages (agent_name, role, content, token_count) VALUES (?, ?, ?, ?)")
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -57,7 +75,7 @@ func SaveMessage(db *sql.DB, agentName, role, content string) error {
 		}
 	}()
 
-	_, err = stmt.Exec(agentName, role, content)
+	_, err = stmt.Exec(agentName, role, content, tokenCount)
 	if err != nil {
 		return fmt.Errorf("failed to insert message: %w", err)
 	}
@@ -69,7 +87,7 @@ func LoadMessages(db *sql.DB, agentName string) ([]deepseek.Message, error) {
 	if db == nil {
 		return nil, errors.New("database connection is nil")
 	}
-	rows, err := db.Query("SELECT role, content FROM messages WHERE agent_name = ? ORDER BY created_at ASC", agentName)
+	rows, err := db.Query("SELECT role, content, token_count FROM messages WHERE agent_name = ? ORDER BY created_at ASC", agentName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query messages: %w", err)
 	}
@@ -82,10 +100,15 @@ func LoadMessages(db *sql.DB, agentName string) ([]deepseek.Message, error) {
 	var messages []deepseek.Message
 	for rows.Next() {
 		var role, content string
-		if err := rows.Scan(&role, &content); err != nil {
+		var tokenCount sql.NullInt64 // token_count may be NULL
+		if err := rows.Scan(&role, &content, &tokenCount); err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		messages = append(messages, deepseek.Message{Role: role, Content: content})
+		msg := deepseek.Message{Role: role, Content: content}
+		if tokenCount.Valid {
+			msg.TokenCount = int(tokenCount.Int64)
+		}
+		messages = append(messages, msg)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows error: %w", err)

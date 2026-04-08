@@ -91,14 +91,33 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.service.SendMessage(r.Context(), agentName, req.Message)
+	// Load existing messages to calculate history tokens
+	historyMessages, err := h.service.GetChatHistory(agentName)
+	if err != nil {
+		log.Printf("warning: failed to load history messages for token calculation: %v", err)
+		// Continue anyway
+	}
+	historyTokens := 0
+	for _, msg := range historyMessages {
+		historyTokens += msg.TokenCount
+	}
+
+	response, usage, err := h.service.SendMessageWithUsage(r.Context(), agentName, req.Message)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to send message: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]string{"response": response}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"response": response,
+		"token_counts": map[string]interface{}{
+			"prompt_tokens":     usage.PromptTokens,
+			"completion_tokens": usage.CompletionTokens,
+			"total_tokens":      usage.TotalTokens,
+			"history_tokens":    historyTokens,
+		},
+	}); err != nil {
 		log.Printf("failed to encode send message response: %v", err)
 	}
 }

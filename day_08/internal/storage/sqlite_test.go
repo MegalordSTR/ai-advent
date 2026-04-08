@@ -115,7 +115,7 @@ func TestSaveMessage(t *testing.T) {
 				}
 			}
 
-			err := SaveMessage(db, tt.agentName, tt.role, tt.content)
+			err := SaveMessage(db, tt.agentName, tt.role, tt.content, 0)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SaveMessage() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -180,7 +180,7 @@ func TestLoadMessages(t *testing.T) {
 	}
 
 	for _, msg := range messages {
-		if err := SaveMessage(db, agentName, msg.role, msg.content); err != nil {
+		if err := SaveMessage(db, agentName, msg.role, msg.content, 0); err != nil {
 			t.Fatalf("failed to save test message: %v", err)
 		}
 	}
@@ -236,10 +236,10 @@ func TestDeleteMessages(t *testing.T) {
 	agentName := "test-agent"
 
 	// Insert some messages
-	if err := SaveMessage(db, agentName, "user", "message 1"); err != nil {
+	if err := SaveMessage(db, agentName, "user", "message 1", 0); err != nil {
 		t.Fatalf("failed to save test message: %v", err)
 	}
-	if err := SaveMessage(db, agentName, "assistant", "response 1"); err != nil {
+	if err := SaveMessage(db, agentName, "assistant", "response 1", 0); err != nil {
 		t.Fatalf("failed to save test message: %v", err)
 	}
 
@@ -294,7 +294,7 @@ func TestPruneMessages(t *testing.T) {
 
 	// Insert more messages than limit
 	for i := 1; i <= 10; i++ {
-		if err := SaveMessage(db, agentName, "user", fmt.Sprintf("message %d", i)); err != nil {
+		if err := SaveMessage(db, agentName, "user", fmt.Sprintf("message %d", i), 0); err != nil {
 			t.Fatalf("failed to save test message: %v", err)
 		}
 	}
@@ -333,7 +333,7 @@ func TestPruneMessages(t *testing.T) {
 	t.Run("prune with limit larger than existing messages", func(t *testing.T) {
 		// Insert 3 more messages
 		for i := 11; i <= 13; i++ {
-			if err := SaveMessage(db, agentName, "user", fmt.Sprintf("message %d", i)); err != nil {
+			if err := SaveMessage(db, agentName, "user", fmt.Sprintf("message %d", i), 0); err != nil {
 				t.Fatalf("failed to save test message: %v", err)
 			}
 		}
