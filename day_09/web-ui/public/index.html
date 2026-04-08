@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Chat</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <h1>🤖 AI Agent Chat</h1>
+    <div class="container">
+        <div class="sidebar">
+            <h2>Agents</h2>
+            <ul class="agents-list" id="agentsList">
+                <!-- Agents will be loaded here -->
+            </ul>
+        </div>
+        <div class="chat-area">
+            <div class="messages" id="messagesContainer">
+                <!-- Messages will appear here -->
+            </div>
+            <div class="error hidden" id="errorBox"></div>
+            <div class="input-area">
+                <textarea id="messageInput" placeholder="Type your message here..." rows="3"></textarea>
+                <div class="token-info" id="tokenInfo">
+                    <span>Tokens: <span id="currentTokens">0</span> (approx)</span>
+                    <span class="token-details hidden" id="tokenDetails">
+                        | Prompt: <span id="promptTokens">0</span> | 
+                        Completion: <span id="completionTokens">0</span> | 
+                        Total: <span id="totalTokens">0</span> |
+                        History: <span id="historyTokens">0</span>
+                    </span>
+                </div>
+                <button id="sendButton">Send</button>
+            </div>
+            <div class="status" id="status">Select an agent to start chatting</div>
+        </div>
+    </div>
+
+    <script type="module" src="/js/app.js"></script>
+</body>
+</html>

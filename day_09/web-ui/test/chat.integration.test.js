@@ -1,0 +1,431 @@
+import { createChatApp } from '../public/js/chat.js';
+
+// Mock fetch globally
+global.fetch = jest.fn();
+
+describe('Chat UI Integration', () => {
+    let chatApp;
+    let agentsList;
+    let messagesContainer;
+    let messageInput;
+    let sendButton;
+    let status;
+    let errorBox;
+
+    beforeEach(() => {
+        // Clear all mocks
+        fetch.mockClear();
+        
+        // Create real DOM elements
+        agentsList = document.createElement('ul');
+        agentsList.id = 'agentsList';
+        
+        messagesContainer = document.createElement('div');
+        messagesContainer.id = 'messagesContainer';
+        
+        messageInput = document.createElement('textarea');
+        messageInput.id = 'messageInput';
+        
+        sendButton = document.createElement('button');
+        sendButton.id = 'sendButton';
+        
+        status = document.createElement('div');
+        status.id = 'status';
+        
+        errorBox = document.createElement('div');
+        errorBox.id = 'errorBox';
+        errorBox.classList.add('hidden');
+        
+        // Token display elements (must be in DOM for getElementById)
+        const tokenInfo = document.createElement('div');
+        tokenInfo.id = 'tokenInfo';
+        const currentTokens = document.createElement('span');
+        currentTokens.id = 'currentTokens';
+        const tokenDetails = document.createElement('span');
+        tokenDetails.id = 'tokenDetails';
+        tokenDetails.classList.add('hidden');
+        const promptTokens = document.createElement('span');
+        promptTokens.id = 'promptTokens';
+        const completionTokens = document.createElement('span');
+        completionTokens.id = 'completionTokens';
+        const totalTokens = document.createElement('span');
+        totalTokens.id = 'totalTokens';
+        const historyTokens = document.createElement('span');
+        historyTokens.id = 'historyTokens';
+        
+        // Assemble token hierarchy
+        tokenInfo.appendChild(currentTokens);
+        tokenInfo.appendChild(tokenDetails);
+        tokenDetails.appendChild(promptTokens);
+        tokenDetails.appendChild(completionTokens);
+        tokenDetails.appendChild(totalTokens);
+        tokenDetails.appendChild(historyTokens);
+        
+        // Append all to document body so getElementById works
+        document.body.innerHTML = '';
+        document.body.appendChild(agentsList);
+        document.body.appendChild(messagesContainer);
+        document.body.appendChild(messageInput);
+        document.body.appendChild(sendButton);
+        document.body.appendChild(status);
+        document.body.appendChild(errorBox);
+        document.body.appendChild(tokenInfo);
+        
+        // Create chat app with real elements
+        chatApp = createChatApp({
+            agentsList,
+            messagesContainer,
+            messageInput,
+            sendButton,
+            status,
+            errorBox,
+            API_BASE: 'http://localhost:8080/api'
+        });
+    });
+
+    describe('Agent selection', () => {
+        test('selectAgent loads and displays messages', async () => {
+            const mockAgent = {
+                Name: 'Помощник',
+                Description: 'Test agent',
+            };
+            
+            // Create a mock agent item
+            const agentItem = document.createElement('li');
+            agentItem.className = 'agent-item';
+            agentsList.appendChild(agentItem);
+            
+            const mockMessages = [
+                { role: 'user', content: 'Hello' },
+                { role: 'assistant', content: 'Hi there' },
+            ];
+            
+            // Mock successful fetch for messages
+            fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => mockMessages,
+            });
+            
+            // Simulate click event
+            const mockEvent = {
+                target: agentItem,
+            };
+            
+            await chatApp.selectAgent(mockAgent, mockEvent);
+            
+            // Verify current agent is set
+            expect(chatApp.getCurrentAgent()).toEqual(mockAgent);
+            
+            // Verify fetch was called with encoded agent name
+            expect(fetch).toHaveBeenCalledWith(
+                'http://localhost:8080/api/agents/%D0%9F%D0%BE%D0%BC%D0%BE%D1%89%D0%BD%D0%B8%D0%BA/messages'
+            );
+            
+            // Verify messages are rendered
+            expect(chatApp.getCurrentMessages()).toEqual(mockMessages);
+            expect(messagesContainer.children.length).toBe(2);
+            expect(messagesContainer.children[0].className).toBe('message user');
+            expect(messagesContainer.children[0].textContent).toBe('Hello');
+            expect(messagesContainer.children[1].className).toBe('message assistant');
+            expect(messagesContainer.children[1].textContent).toBe('Hi there');
+            
+            // Verify status updated
+            expect(status.textContent).toBe('Ready to chat with Помощник');
+        });
+
+        test('selectAgent displays token counts when messages have token_count', async () => {
+            const mockAgent = {
+                Name: 'Helper',
+                Description: 'Test agent',
+            };
+            
+            const agentItem = document.createElement('li');
+            agentItem.className = 'agent-item';
+            agentsList.appendChild(agentItem);
+            
+            const mockMessages = [
+                { role: 'user', content: 'Hello', token_count: 10 },
+                { role: 'assistant', content: 'Hi there', token_count: 15 },
+                { role: 'system', content: 'You are helpful', token_count: 5 }, // should be filtered
+            ];
+            
+            fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => mockMessages,
+            });
+            
+            const mockEvent = { target: agentItem };
+            
+            await chatApp.selectAgent(mockAgent, mockEvent);
+            
+            // Verify messages rendered
+            expect(chatApp.getCurrentAgent()).toEqual(mockAgent);
+            expect(chatApp.getCurrentMessages()).toEqual([
+                { role: 'user', content: 'Hello', token_count: 10 },
+                { role: 'assistant', content: 'Hi there', token_count: 15 },
+            ]);
+            
+            // Verify token sums: history = 10+15+5 = 30 (including system message tokens)
+            const historyEl = document.getElementById('historyTokens');
+            const totalEl = document.getElementById('totalTokens');
+            const tokenDetailsEl = document.getElementById('tokenDetails');
+            expect(historyEl.textContent).toBe('30');
+            expect(totalEl.textContent).toBe('30');
+            // prompt/completion remain 0
+            expect(document.getElementById('promptTokens').textContent).toBe('0');
+            expect(document.getElementById('completionTokens').textContent).toBe('0');
+            // token details should be visible
+            expect(tokenDetailsEl.classList.contains('hidden')).toBe(false);
+        });
+
+        test('selectAgent shows error when fetch fails', async () => {
+            const mockAgent = { Name: 'Test', Description: 'Test' };
+            const agentItem = document.createElement('li');
+            agentItem.className = 'agent-item';
+            agentsList.appendChild(agentItem);
+            
+            fetch.mockRejectedValueOnce(new Error('Network error'));
+            
+            const mockEvent = { target: agentItem };
+            
+            await chatApp.selectAgent(mockAgent, mockEvent);
+            
+            // Verify error is shown
+            expect(errorBox.textContent).toBe('Failed to load messages: Network error');
+            expect(errorBox.classList.contains('hidden')).toBe(false);
+            
+            // Verify placeholder message is shown
+            expect(messagesContainer.innerHTML).toContain('No messages yet');
+        });
+    });
+
+    describe('Message rendering', () => {
+        test('renderMessages filters system messages', () => {
+            const messages = [
+                { role: 'system', content: 'You are a helpful assistant' },
+                { role: 'user', content: 'Hello' },
+                { role: 'assistant', content: 'Hi' },
+                { role: 'system', content: 'Ignore this' },
+            ];
+            
+            chatApp.renderMessages(messages);
+            
+            // Only user and assistant messages should be kept
+            expect(chatApp.getCurrentMessages()).toEqual([
+                { role: 'user', content: 'Hello' },
+                { role: 'assistant', content: 'Hi' },
+            ]);
+            
+            // Verify DOM contains only user and assistant messages
+            expect(messagesContainer.children.length).toBe(2);
+            expect(messagesContainer.children[0].className).toBe('message user');
+            expect(messagesContainer.children[0].textContent).toBe('Hello');
+            expect(messagesContainer.children[1].className).toBe('message assistant');
+            expect(messagesContainer.children[1].textContent).toBe('Hi');
+        });
+
+        test('renderMessages shows placeholder when no messages', () => {
+            chatApp.renderMessages([]);
+            
+            expect(messagesContainer.innerHTML).toBe(
+                '<div class="message assistant">No messages yet. Start the conversation!</div>'
+            );
+            expect(chatApp.getCurrentMessages()).toEqual([]);
+        });
+
+        test('renderMessages handles lowercase role/content fields from API', () => {
+            const messages = [
+                { role: 'system', content: 'You are a helpful assistant' },
+                { role: 'user', content: 'Hello' },
+                { role: 'assistant', content: 'Hi there' },
+            ];
+            
+            chatApp.renderMessages(messages);
+            
+            // Should filter out system messages
+            expect(chatApp.getCurrentMessages()).toEqual([
+                { role: 'user', content: 'Hello' },
+                { role: 'assistant', content: 'Hi there' },
+            ]);
+            
+            // Should render user and assistant messages with correct classes and content
+            expect(messagesContainer.children.length).toBe(2);
+            expect(messagesContainer.children[0].className).toBe('message user');
+            expect(messagesContainer.children[0].textContent).toBe('Hello');
+            expect(messagesContainer.children[1].className).toBe('message assistant');
+            expect(messagesContainer.children[1].textContent).toBe('Hi there');
+        });
+    });
+
+    describe('Sending messages', () => {
+        beforeEach(() => {
+            // Set up a current agent by calling selectAgent
+            const mockAgent = { Name: 'Помощник', Description: 'Test' };
+            const agentItem = document.createElement('li');
+            agentItem.className = 'agent-item';
+            agentsList.appendChild(agentItem);
+            
+            // Mock initial messages load
+            fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => [],
+            });
+            
+            return chatApp.selectAgent(mockAgent, { target: agentItem });
+        });
+
+        test('sendMessage adds user message immediately and sends to API', async () => {
+            // Set input text
+            messageInput.value = 'How are you?';
+            
+            // Mock successful API response
+            fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ response: 'I am fine, thank you.' }),
+            });
+            
+            await chatApp.sendMessage();
+            
+            // Verify user message was added to DOM immediately
+            // Find user message in container
+            const userMessages = Array.from(messagesContainer.children).filter(
+                child => child.className === 'message user'
+            );
+            expect(userMessages).toHaveLength(1);
+            expect(userMessages[0].textContent).toBe('How are you?');
+            // Ensure placeholder is not present
+            expect(messagesContainer.innerHTML).not.toContain('No messages yet');
+            
+            // Verify input was cleared and disabled during request
+            expect(messageInput.value).toBe('');
+            
+            // Verify fetch was called with correct parameters
+            expect(fetch).toHaveBeenCalledWith(
+                'http://localhost:8080/api/agents/%D0%9F%D0%BE%D0%BC%D0%BE%D1%89%D0%BD%D0%B8%D0%BA/messages',
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: 'How are you?' }),
+                }
+            );
+            
+            // Verify assistant response was added
+            // Note: The mock fetch resolves after the test, but we can check the second call
+            // Actually, we need to wait for the async operation to complete
+            // Since we await sendMessage, the fetch mock should have resolved
+            // The renderMessages for assistant response should have been called
+            // Let's check the final state
+             expect(chatApp.getCurrentMessages()).toContainEqual(
+                 { role: 'assistant', content: 'I am fine, thank you.' }
+             );
+            
+            // Verify status updated
+            expect(status.textContent).toBe('Ready to chat with Помощник');
+        });
+
+        test('sendMessage updates token counts from API response', async () => {
+            messageInput.value = 'Test question';
+            
+            // Mock API response with token_counts
+            fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    response: 'Test answer',
+                    token_counts: {
+                        prompt_tokens: 20,
+                        completion_tokens: 10,
+                        total_tokens: 30,
+                        history_tokens: 5, // previous history tokens
+                    },
+                }),
+            });
+            
+            await chatApp.sendMessage();
+            
+            // Verify token display updated
+            expect(document.getElementById('promptTokens').textContent).toBe('20');
+            expect(document.getElementById('completionTokens').textContent).toBe('10');
+            expect(document.getElementById('totalTokens').textContent).toBe('30');
+            expect(document.getElementById('historyTokens').textContent).toBe('5');
+            // token details should be visible
+            expect(document.getElementById('tokenDetails').classList.contains('hidden')).toBe(false);
+        });
+
+        test('sendMessage handles API error', async () => {
+            messageInput.value = 'Test message';
+            
+            // Mock failed API call
+            fetch.mockRejectedValueOnce(new Error('API error'));
+            
+            await chatApp.sendMessage();
+            
+            // Verify error is shown
+            expect(errorBox.textContent).toBe('Failed to send message: API error');
+            expect(errorBox.classList.contains('hidden')).toBe(false);
+            
+            // Verify status shows error
+            expect(status.textContent).toBe('Error - try again');
+            
+            // Verify input was re-enabled (check that it's not disabled)
+            expect(messageInput.disabled).toBe(false);
+        });
+
+        test('sendMessage does nothing when no agent selected', async () => {
+            // Clear current agent by creating a new chat app without selecting agent
+            const newChatApp = createChatApp({
+                agentsList,
+                messagesContainer,
+                messageInput,
+                sendButton,
+                status,
+                errorBox,
+                API_BASE: 'http://localhost:8080/api'
+            });
+            
+            // Verify no agent is selected
+            expect(newChatApp.getCurrentAgent()).toBeNull();
+            
+            messageInput.value = 'Test';
+            
+            await newChatApp.sendMessage();
+            
+            // fetch was called once by selectAgent in beforeEach
+            // sendMessage should not make additional calls
+            expect(fetch).toHaveBeenCalledTimes(1);
+        });
+
+        test('sendMessage does nothing with empty input', async () => {
+            messageInput.value = '   ';
+            expect(messageInput.value).toBe('   ');
+            
+            await chatApp.sendMessage();
+            
+            // fetch was called once by selectAgent in beforeEach
+            // sendMessage should not make additional calls with empty input
+            expect(fetch).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('Helper functions', () => {
+        test('escapeHtml escapes special characters', () => {
+            const result = chatApp.escapeHtml('<script>alert("xss")</script>');
+            // jsdom may escape quotes differently
+            expect(result).toMatch(/&lt;script&gt;alert\(.xss.\)&lt;\/script&gt;/);
+        });
+
+        test('showError displays and hides error message', () => {
+            jest.useFakeTimers();
+            
+            chatApp.showError('Test error');
+            
+            expect(errorBox.textContent).toBe('Test error');
+            expect(errorBox.classList.contains('hidden')).toBe(false);
+            
+            // Fast-forward timers
+            jest.advanceTimersByTime(5000);
+            expect(errorBox.classList.contains('hidden')).toBe(true);
+            
+            jest.useRealTimers();
+        });
+    });
+});
